@@ -3,6 +3,9 @@ from flask import Flask, request
 from flask_cors import CORS
 import torch
 import torchaudio
+import pickle
+import Levenshtein as lvdist
+
 
 app = Flask(__name__)
 CORS(app)
@@ -50,6 +53,9 @@ def before_first_request():
     model = bundle.get_model().to(device)
     global wakeword_class
     wakeword_class = Wakeword('')
+    global common_words
+    with open('common_words.pickle', 'rb') as f:
+        common_words = pickle.load(f)
 
 def get_new_tensor(filename, skip_model = False):
         wakeword_sig, wakeword_sf = torchaudio.load(filename)
@@ -74,6 +80,20 @@ def check_transcript_for_wakeword(transcript, wakeword):
             command_set = True
     return " ".join(command)
 
+def score_wake_word(wakeword, corpus):
+    '''
+    Strength: 
+    <2: Very Strong
+    3-5: Strong
+    6-10: Medium
+    11-20: Weak
+    21+: Awful
+    '''
+    ww = wakeword.lower()
+    dists = [lvdist.distance(ww, x) for x in words]
+    strength = sum([1 if d < 3 else 0 for d in dists])
+    return strength
+
 @app.route('/')
 def home():
     return "ok"
@@ -94,10 +114,13 @@ def wakeword():
     wakeword_class.set_wakeword(transcript_split[0])
     print('Wakeword:', wakeword_class.get_wakeword())
     if wakeword_class.get_wakeword() != "":
+        strength = score_wake_word(wakeword_class.get_wakeword(), common_words)
         return {'transcript' : wakeword_class.get_wakeword(),
+                'wakewordStrength': strength,
                 'success' : True}
     else:
         return {'transcript' : "No wakeword detected",
+                'wakewordStrength': 100,
                 'success' : False}
 
 @app.route('/api/command', methods=['POST'])
