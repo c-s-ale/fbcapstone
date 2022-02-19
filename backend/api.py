@@ -10,17 +10,6 @@ import Levenshtein as lvdist
 app = Flask(__name__)
 CORS(app)
 
-
-class Wakeword:
-    def __init__(self, wakeword):
-        self.wakeword = wakeword
-    
-    def get_wakeword(self):
-        return self.wakeword
-    
-    def set_wakeword(self, wakeword):
-        self.wakeword = wakeword
-
 class GreedyCTCDecoder(torch.nn.Module):
     def __init__(self, labels, blank=0):
         super().__init__()
@@ -43,6 +32,10 @@ class GreedyCTCDecoder(torch.nn.Module):
 
 @app.before_first_request
 def before_first_request():
+    """
+    Load the model and the wakeword, initialize the bundle,
+    and load the corpus
+    """
     global device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Using device: {device}')
@@ -51,26 +44,36 @@ def before_first_request():
     print(f'Using bundle: {bundle}')
     global model
     model = bundle.get_model().to(device)
-    global wakeword_class
-    wakeword_class = Wakeword('')
     global common_words
     with open('common_words.pickle', 'rb') as f:
         common_words = pickle.load(f)
 
 def get_new_tensor(filename, skip_model = False):
-        wakeword_sig, wakeword_sf = torchaudio.load(filename)
-        wakeword_wav = torch.tensor(wakeword_sig[0])[None,:]
-        wakeword_wav = wakeword_wav.to(device)
-        if wakeword_sf != bundle.sample_rate:
-            wakeword_wav = torchaudio.functional.resample(wakeword_wav, wakeword_sf, bundle.sample_rate)
-        if skip_model:
-            return wakeword_wav
-
-        with torch.inference_mode():
-            wakeword_emission, _ = model(wakeword_wav)
-        return wakeword_emission[0]
+    """
+    Args:
+        filename (str): The filename of the audio file
+        skip_model (bool): Whether to skip the model
+    Returns:
+        tensor (Tensor): The tensor of the processed audio file
+    """
+    wakeword_sig, wakeword_sf = torchaudio.load(filename)
+    wakeword_wav = torch.tensor(wakeword_sig[0])[None,:]
+    wakeword_wav = wakeword_wav.to(device)
+    if wakeword_sf != bundle.sample_rate:
+        wakeword_wav = torchaudio.functional.resample(wakeword_wav, wakeword_sf, bundle.sample_rate)
+    if skip_model:
+        return wakeword_wav
+    with torch.inference_mode():
+        wakeword_emission, _ = model(wakeword_wav)
+    return wakeword_emission[0]
 
 def check_transcript_for_wakeword(transcript, wakeword):
+    """
+    Args:
+        transcript (str): The transcript to check
+        wakeword (str): The wakeword to check for
+    Returns:
+        command (str): The command to execute"""
     command_set = False
     command = []
     for word in transcript:
@@ -90,7 +93,7 @@ def score_wake_word(wakeword, corpus):
     21+: Awful
     '''
     ww = wakeword.lower()
-    dists = [lvdist.distance(ww, x) for x in words]
+    dists = [lvdist.distance(ww, x) for x in common_words]
     strength = sum([1 if d < 3 else 0 for d in dists])
     return strength
 
@@ -111,11 +114,11 @@ def wakeword():
     decoder = GreedyCTCDecoder(labels=bundle.get_labels())
     transcript = decoder(wakeword_tensor)
     transcript_split = transcript.split('|')
-    wakeword_class.set_wakeword(transcript_split[0])
-    print('Wakeword:', wakeword_class.get_wakeword())
-    if wakeword_class.get_wakeword() != "":
-        strength = score_wake_word(wakeword_class.get_wakeword(), common_words)
-        return {'transcript' : wakeword_class.get_wakeword(),
+    wakeword = transcript_split[0]
+    print('Wakeword:', wakeword)
+    if wakeword != "":
+        strength = score_wake_word(wakeword, common_words)
+        return {'wakeword' : wakeword,
                 'wakewordStrength': strength,
                 'success' : True}
     else:
@@ -129,6 +132,8 @@ def command():
     if 'file' in request.files:
         audio_file = request.files['file']
         audio_file.save(f'./wav/command.wav')
+        wakeword = request.form['wakeword']
+        wakeword = wakeword.lower()
     else:
         return {'transcript' : 'No audio file found',
                 'success' : False}
@@ -137,8 +142,8 @@ def command():
     decoder = GreedyCTCDecoder(labels=bundle.get_labels())
     transcript = decoder(command_tensor)
     transcript_list = transcript.split('|')
-    if wakeword_class.get_wakeword() != "":
-        new_command = check_transcript_for_wakeword(transcript_list, wakeword_class.get_wakeword())
+    if wakeword != "":
+        new_command = check_transcript_for_wakeword(transcript_list, wakeword)
     else:
         return {'transcript' : "Please set a wake word first!",
                 'success' : False}

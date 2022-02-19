@@ -17,7 +17,10 @@ class CommandUpload extends React.Component {
     ev.preventDefault();
 
     const data = new FormData();
+    const wakeword = this.props.wakeword;
+    data.append('wakeword', wakeword);
     data.append('file', this.uploadInput.files[0]);
+    
 
     fetch('http://localhost:5000/api/command', {
       method: 'POST',
