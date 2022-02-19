@@ -16,6 +16,22 @@ class WakewordUpload extends React.Component {
     this.handleUploadImage = this.handleUploadImage.bind(this);
   }
 
+  strengthColor(strength) {
+    if (strength >= 21) {
+      return 'red';
+    }
+    else if (strength >= 11) {
+      return 'orange';
+    }
+    else if (strength >= 6) {
+      return 'yellow';
+    }
+    else if (strength >= 3) {
+      return 'yellow-green';
+    }
+    return 'green';
+  }
+
   handleUploadImage(ev) {
     ev.preventDefault();
 
@@ -47,13 +63,17 @@ class WakewordUpload extends React.Component {
           <div>
             <button>Upload</button>
           </div>
-          <div style={{flex: 1, flexDirection: 'row'}}>
-            <p style={{ color: this.state.success ? 'green' : 'red'}}>{this.state.wakeword}</p>
+          <div style={{flex: 1, color: this.state.success ? this.strengthColor(this.state.wakewordStrength) : 'red'}}>
+            <br></br>
+            <h1>Wakeword / Strength</h1>
+            <p>Out of 5 stars, we rate your wakeword:</p>
             <FontAwesomeIcon icon={ this.state.wakewordStrength < 21  ? faStar : farStar}/>
             <FontAwesomeIcon icon={ this.state.wakewordStrength < 11  ? faStar : farStar}/>
             <FontAwesomeIcon icon={ this.state.wakewordStrength < 6  ? faStar : farStar}/>
             <FontAwesomeIcon icon={ this.state.wakewordStrength < 3  ? faStar : farStar} />
             <FontAwesomeIcon icon={ this.state.wakewordStrength < 2  ? faStar : farStar} />
+            <p>Your wakeword is: {this.state.wakeword} <br></br>The Levenshtien Score (compared 
+            to 2000 commonly spoken words) is: {this.state.wakewordStrength} (lower is better)</p>
           </div>
         </form>
       );
