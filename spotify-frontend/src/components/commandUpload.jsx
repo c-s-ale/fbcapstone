@@ -34,7 +34,8 @@ class CommandUpload extends React.Component {
   }
 
   render() {
-    return (
+    if (this.state.success) {
+      return (
       <form onSubmit={this.handleUploadImage}>
         <div>
           <input ref={(ref) => { this.uploadInput = ref; }} type="file" />
@@ -43,9 +44,25 @@ class CommandUpload extends React.Component {
         <div>
           <button>Upload</button>
         </div>
+        {this.state.set = true}
+        <p>After parsing the audio you submitted we detected your wakeword and parsed the following command: </p>
         <p style={{ color: this.state.success ? 'green' : 'red'}}>{this.state.transcript}</p>
       </form>
     );
+  } else {
+    return (
+    <form onSubmit={this.handleUploadImage}>
+        <div>
+          <input ref={(ref) => { this.uploadInput = ref; }} type="file" />
+        </div>
+        <br />
+        <div>
+          <button>Upload</button>
+        </div>
+        <p>Either you have not submitted audio, or we could not detect your wakeword.</p>
+      </form>
+    );
+    }
   }
 }
 
