@@ -1,5 +1,6 @@
 Flask==2.0.2
 Flask_Cors==3.0.10
+python_Levenshtein==0.12.2
 torch==1.10.2
 torchaudio==0.10.2
-python-Levenshtein
+gunicorn==19.9.0

@@ -38,7 +38,7 @@ class WakewordUpload extends React.Component {
     const data = new FormData();
     data.append('file', this.uploadInput.files[0]);
 
-    fetch('http://localhost:5000/api/wakeword', {
+    fetch('/api/wakeword', {
       method: 'POST',
       body: data,
     }).then((response) => {

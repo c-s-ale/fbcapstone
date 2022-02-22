@@ -22,7 +22,7 @@ class CommandUpload extends React.Component {
     data.append('file', this.uploadInput.files[0]);
     
 
-    fetch('http://localhost:5000/api/command', {
+    fetch('/api/command', {
       method: 'POST',
       body: data,
     }).then((response) => {

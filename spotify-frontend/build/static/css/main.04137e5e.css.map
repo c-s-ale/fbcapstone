@@ -1,0 +1,1 @@
+{"version":3,"file":"static/css/main.04137e5e.css","mappings":"AAAA,KACI,wBAAyB,CACzB,iBACJ","sources":["components/command.css"],"sourcesContent":["body {\n    background-color: #bedb9c;\n    text-align: center;\n}"],"names":[],"sourceRoot":""}
