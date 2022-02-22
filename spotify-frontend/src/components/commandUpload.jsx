@@ -46,7 +46,7 @@ class CommandUpload extends React.Component {
         </div>
         {this.state.set = true}
         <p>After parsing the audio you submitted we detected your wakeword and parsed the following command: </p>
-        <p style={{ color: this.state.success ? 'green' : 'red'}}>{this.state.transcript}</p>
+        <p style={{ color: this.state.success ? 'light-green' : 'red'}}>{this.state.transcript}</p>
       </form>
     );
   } else {
