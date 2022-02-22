@@ -72,8 +72,6 @@ class WakewordUpload extends React.Component {
             <FontAwesomeIcon icon={ this.state.wakewordStrength < 6  ? faStar : farStar}/>
             <FontAwesomeIcon icon={ this.state.wakewordStrength < 3  ? faStar : farStar} />
             <FontAwesomeIcon icon={ this.state.wakewordStrength < 2  ? faStar : farStar} />
-            <p>Your wakeword is: {this.state.wakeword} <br></br>The Levenshtien Score (compared 
-            to 2000 commonly spoken words) is: {this.state.wakewordStrength} (lower is better)</p>
           </div>
         </form>
       );
