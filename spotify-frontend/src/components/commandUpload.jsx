@@ -6,8 +6,10 @@ class CommandUpload extends React.Component {
     super(props);
 
     this.state = {
-      transcript: '',
+      transcript: 'Did Not Detect Wakeword',
       success: false,
+      detected_wakeword: false,
+      found_word: '',
     };
 
     this.handleUploadImage = this.handleUploadImage.bind(this);
@@ -22,19 +24,21 @@ class CommandUpload extends React.Component {
     data.append('file', this.uploadInput.files[0]);
     
 
-    fetch('/api/command', {
+    fetch('http://127.0.0.1:5000/api/command', {
       method: 'POST',
       body: data,
     }).then((response) => {
       response.json().then((body) => {
         this.setState({ transcript: body.transcript });
         this.setState({ success: body.success });
+        this.setState({ detected_wakeword: body.detect_wakeword });
+        this.setState({ found_word: body.wakeword });
       });
     });
   }
 
   render() {
-    if (this.state.success) {
+    if (this.state.detected_wakeword) {
       return (
       <form onSubmit={this.handleUploadImage}>
         <div>
@@ -45,8 +49,8 @@ class CommandUpload extends React.Component {
           <button>Upload</button>
         </div>
         {this.state.set = true}
-        <p>After parsing the audio you submitted we detected your wakeword and parsed the following command: </p>
-        <p style={{ color: this.state.success ? 'light-green' : 'red'}}>{this.state.transcript}</p>
+        <p>After parsing the audio you submitted we detected your wakeword "{this.state.found_word}" and parsed the following command: </p>
+        { this.state.transcript != "" ? <p>{this.state.transcript}</p> : <p>No command detected</p> }
       </form>
     );
   } else {

@@ -76,12 +76,14 @@ def check_transcript_for_wakeword(transcript, wakeword):
         command (str): The command to execute"""
     command_set = False
     command = []
+    new_wake = ""
     for word in transcript:
         if command_set:
             command.append(word)
         if word.lower() == wakeword.lower():
             command_set = True
-    return " ".join(command)
+            new_wake = word
+    return " ".join(command), new_wake
 
 def score_wake_word(wakeword, corpus):
     '''
@@ -142,19 +144,23 @@ def command():
     decoder = GreedyCTCDecoder(labels=bundle.get_labels())
     transcript = decoder(command_tensor)
     transcript_list = transcript.split('|')
+    print('Transcript:', transcript)
     if wakeword != "":
-        new_command = check_transcript_for_wakeword(transcript_list, wakeword)
+        new_command, found_wake = check_transcript_for_wakeword(transcript_list, wakeword)
     else:
         return {'transcript' : "Please set a wake word first!",
                 'success' : False}
 
-    if new_command != "":
+    if found_wake != "":
         return {'transcript': new_command,
-                'success' : True}
+                'detect_wakeword': True,
+                'success' : True,
+                'wakeword': found_wake}
     else:
         return {'transcript' : "No command detected",
-                'success' : False}
+                'success' : False,
+                'detect_wakeword': False,}
 
 if __name__ == '__main__':
-    app.run(port=8080)
+    app.run(port=5000, debug=True)
 

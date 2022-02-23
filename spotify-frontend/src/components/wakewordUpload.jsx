@@ -38,7 +38,7 @@ class WakewordUpload extends React.Component {
     const data = new FormData();
     data.append('file', this.uploadInput.files[0]);
 
-    fetch('/api/wakeword', {
+    fetch('http://127.0.0.1:5000/api/wakeword', {
       method: 'POST',
       body: data,
     }).then((response) => {
@@ -66,6 +66,7 @@ class WakewordUpload extends React.Component {
           <div style={{flex: 1, color: this.state.success ? this.strengthColor(this.state.wakewordStrength) : 'red'}}>
             <br></br>
             <h1>Wakeword / Strength</h1>
+            <p>We understood your wake word to be: {this.state.wakeword}</p>
             <p>Out of 5 stars, we rate your wakeword:</p>
             <FontAwesomeIcon icon={ this.state.wakewordStrength < 21  ? faStar : farStar}/>
             <FontAwesomeIcon icon={ this.state.wakewordStrength < 11  ? faStar : farStar}/>
