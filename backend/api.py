@@ -1,4 +1,3 @@
-import json
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from model import Wav2Vec2, GreedyCTCDecoder
@@ -99,7 +98,7 @@ def command():
                                           wakeword)
         # Delete the file
         os.remove(command_file)
-        
+
         if detected:
             return jsonify({'command': command,
                             'success' : True,})
@@ -112,5 +111,5 @@ def command():
     
 
 if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+    app.run(port=5000)
 
