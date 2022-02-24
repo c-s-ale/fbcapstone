@@ -1,165 +1,113 @@
 import json
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from flask_cors import CORS
-import torch
-import torchaudio
-import pickle
-import Levenshtein as lvdist
+from model import Wav2Vec2, GreedyCTCDecoder
+from helper import get_common_words_list, get_wakeword, parse_command, score_word
+from glob import glob
+import os
 
 
 app = Flask(__name__)
 CORS(app)
 
-class GreedyCTCDecoder(torch.nn.Module):
-    def __init__(self, labels, blank=0):
-        super().__init__()
-        self.labels = labels
-        self.blank = blank
-
-    def forward(self, emission: torch.Tensor) -> str:
-        """Given a sequence emission over labels, get the best path string
-        Args:
-          emission (Tensor): Logit tensors. Shape `[num_seq, num_label]`.
-
-        Returns:
-          str: The resulting transcript
-        """
-        indices = torch.argmax(emission, dim=-1)  # [num_seq,]
-        indices = torch.unique_consecutive(indices, dim=-1)
-        indices = [i for i in indices if i != self.blank]
-        return "".join([self.labels[i] for i in indices])
-
-
+# Load model before first request:
+#   Because our model is served through gunicorn, main is not called
+#   this means we need to load the model here.
 @app.before_first_request
 def before_first_request():
     """
     Load the model and the wakeword, initialize the bundle,
     and load the corpus
     """
-    global device
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f'Using device: {device}')
-    global bundle
-    bundle = torchaudio.pipelines.WAV2VEC2_ASR_BASE_960H
-    print(f'Using bundle: {bundle}')
+    # Set global variables for use in endpoints
     global model
-    model = bundle.get_model().to(device)
+    global decoder
     global common_words
-    with open('common_words.pickle', 'rb') as f:
-        common_words = pickle.load(f)
 
-def get_new_tensor(filename, skip_model = False):
-    """
-    Args:
-        filename (str): The filename of the audio file
-        skip_model (bool): Whether to skip the model
-    Returns:
-        tensor (Tensor): The tensor of the processed audio file
-    """
-    wakeword_sig, wakeword_sf = torchaudio.load(filename)
-    wakeword_wav = torch.tensor(wakeword_sig[0])[None,:]
-    wakeword_wav = wakeword_wav.to(device)
-    if wakeword_sf != bundle.sample_rate:
-        wakeword_wav = torchaudio.functional.resample(wakeword_wav, wakeword_sf, bundle.sample_rate)
-    if skip_model:
-        return wakeword_wav
-    with torch.inference_mode():
-        wakeword_emission, _ = model(wakeword_wav)
-    return wakeword_emission[0]
+    # Load the model
+    model = Wav2Vec2()
 
-def check_transcript_for_wakeword(transcript, wakeword):
-    """
-    Args:
-        transcript (str): The transcript to check
-        wakeword (str): The wakeword to check for
-    Returns:
-        command (str): The command to execute"""
-    command_set = False
-    command = []
-    new_wake = ""
-    for word in transcript:
-        if command_set:
-            command.append(word)
-        if word.lower() == wakeword.lower():
-            command_set = True
-            new_wake = word
-    return " ".join(command), new_wake
+    # Load the decoder
+    decoder = GreedyCTCDecoder(labels=model.bundle.get_labels())
 
-def score_wake_word(wakeword, corpus):
-    '''
-    Strength: 
-    <2: Very Strong
-    3-5: Strong
-    6-10: Medium
-    11-20: Weak
-    21+: Awful
-    '''
-    ww = wakeword.lower()
-    dists = [lvdist.distance(ww, x) for x in common_words]
-    strength = sum([1 if d < 3 else 0 for d in dists])
-    return strength
+    # Load common words for calculating Levenshtein distance
+    common_words = get_common_words_list()
 
+# Health Check - Required for Deployment
 @app.route('/')
 def home():
-    return "ok"
+    return "OK"
 
+# Endpoint to get the wakeword
+# TODO: Add proper reponse codes
 @app.route('/api/wakeword', methods=['POST'])
 def wakeword():
-    print('here')
+    """
+        Endpoint to get the wakeword
+
+        Parameters:
+            file: The audio file to be analyzed
+        Returns:
+            wakeword: The wakeword
+            success: True if the wakeword was detected, False otherwise
+            strength: The Levenshtein Score of the detected wakeword
+    """
     if 'file' in request.files:
         audio_file = request.files['file']
-        audio_file.save(f'./wav/wakeword.wav')
-    else:
-        return {'transcript' : 'No file uploaded',
-                'success' : False}
-    wakeword_tensor = get_new_tensor(f'./wav/wakeword.wav')
-    decoder = GreedyCTCDecoder(labels=bundle.get_labels())
-    transcript = decoder(wakeword_tensor)
-    transcript_split = transcript.split('|')
-    wakeword = transcript_split[0]
-    print('Wakeword:', wakeword)
-    if wakeword != "":
-        strength = score_wake_word(wakeword, common_words)
-        return {'wakeword' : wakeword,
-                'wakewordStrength': strength,
-                'success' : True}
-    else:
-        return {'transcript' : "No wakeword detected",
-                'wakewordStrength': 100,
-                'success' : False}
+        wakeword_key = len(glob('/wav/wakeword/*.wav'))
+        wav_file = f'./wav/wakeword/wakeword_{str(wakeword_key)}.wav'
+        audio_file.save(wav_file)
+        encoding = model.encode(wav_file)
+        wakeword = get_wakeword(decoder(encoding))
 
+        # Delete the file
+        os.remove(wav_file)
+
+        if wakeword != "":
+            return jsonify({'wakeword': wakeword,
+                            'success' : True,
+                            'strength': score_word(wakeword, common_words)})
+        else:
+            return jsonify({'wakeword': 'ERROR: Wakeword not detected',
+                            'success' : False,
+                            'strength': None})
+    else:
+        return jsonify({'transcript' : 'ERROR: No file uploaded',
+                        'success'    : False,
+                        'strength'   : None})
+
+# Endpoint to get the command
 @app.route('/api/command', methods=['POST'])
 def command():
+    """
+        Endpoint to detect the wakeword in a command
 
+        Parameters:
+            file: The audio file to be analyzed
+        Returns:
+            wakeword: The wakeword
+            success: True if the wakeword was detected, False otherwise
+            strength: The Levenshtein Score of the detected wakeword
+    """
     if 'file' in request.files:
         audio_file = request.files['file']
-        audio_file.save(f'./wav/command.wav')
+        command_key = len(glob('/wav/command/*.wav'))
+        command_file = f'./wav/command/command_{str(command_key)}.wav'
+        audio_file.save(command_file)
         wakeword = request.form['wakeword']
-        wakeword = wakeword.lower()
-    else:
-        return {'transcript' : 'No audio file found',
-                'success' : False}
+        command, detected = parse_command(decoder(model.encode(command_file)), 
+                                          wakeword)
     
-    command_tensor = get_new_tensor(f'./wav/command.wav')
-    decoder = GreedyCTCDecoder(labels=bundle.get_labels())
-    transcript = decoder(command_tensor)
-    transcript_list = transcript.split('|')
-    print('Transcript:', transcript)
-    if wakeword != "":
-        new_command, found_wake = check_transcript_for_wakeword(transcript_list, wakeword)
+        if detected:
+            return jsonify({'command': command,
+                            'success' : True,})
+        else:
+            return jsonify({'command': 'ERROR: Wakeword not detected',
+                            'success' : False,})
     else:
-        return {'transcript' : "Please set a wake word first!",
-                'success' : False}
-
-    if found_wake != "":
-        return {'transcript': new_command,
-                'detect_wakeword': True,
-                'success' : True,
-                'wakeword': found_wake}
-    else:
-        return {'transcript' : "No command detected",
-                'success' : False,
-                'detect_wakeword': False,}
+        return jsonify({'command' : 'ERROR: No file uploaded',
+                        'success'    : False,})
+    
 
 if __name__ == '__main__':
     app.run(port=5000, debug=True)
