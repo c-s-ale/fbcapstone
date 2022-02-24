@@ -97,7 +97,9 @@ def command():
         wakeword = request.form['wakeword']
         command, detected = parse_command(decoder(model.encode(command_file)), 
                                           wakeword)
-    
+        # Delete the file
+        os.remove(command_file)
+        
         if detected:
             return jsonify({'command': command,
                             'success' : True,})
