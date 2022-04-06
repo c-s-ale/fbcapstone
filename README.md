@@ -1,4 +1,4 @@
-# fbcapstone
+# Custom Wake Word Detection
 Custom wakeword detection by turtle.ai
 
 This is a project by Max, Sina, and Chris!
